@@ -20,6 +20,8 @@ either = "1"
 memmap2 = "0.9.5"
 rawzip = "0.4.1"
 libdeflater = "1.23.0"
+eframe = { version = "0.24", default-features = false, features = ["glow"] }
+rfd = { version = "0.12", default-features = false, features = ["xdg-portal"] }
 
 [target.'cfg(target_env = "musl")'.dependencies]
 mimalloc = "0.1.43"
