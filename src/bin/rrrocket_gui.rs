@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 
 use eframe::{egui, App};
@@ -8,6 +9,7 @@ struct RrrocketGui {
     last_path: Option<PathBuf>,
     last_json: Option<String>,
     last_error: Option<String>,
+    last_status: Option<String>,
 }
 
 impl RrrocketGui {
@@ -17,11 +19,13 @@ impl RrrocketGui {
             last_path: None,
             last_json: None,
             last_error: None,
+            last_status: None,
         }
     }
 
     fn load_path(&mut self, path: PathBuf) {
         self.last_path = Some(path.clone());
+        self.last_status = None;
         match self.parser.parse_file(&path) {
             Ok(replay) => match serde_json::to_string_pretty(&replay) {
                 Ok(json) => {
@@ -43,6 +47,40 @@ impl RrrocketGui {
     fn reparse_last(&mut self) {
         if let Some(path) = self.last_path.clone() {
             self.load_path(path);
+        }
+    }
+
+    fn save_json(&mut self) {
+        let Some(json) = self.last_json.as_ref() else {
+            return;
+        };
+
+        let mut dialog = rfd::FileDialog::new().add_filter("JSON", &["json"]);
+        if let Some(path) = &self.last_path {
+            if let Some(parent) = path.parent() {
+                dialog = dialog.set_directory(parent);
+            }
+            if let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) {
+                let default_name = format!("{stem}.json");
+                dialog = dialog.set_file_name(default_name);
+            }
+        }
+
+        if let Some(save_path) = dialog.save_file() {
+            match fs::write(&save_path, json) {
+                Ok(()) => {
+                    self.last_status =
+                        Some(format!("Saved replay JSON to {}", save_path.display()));
+                    self.last_error = None;
+                }
+                Err(err) => {
+                    self.last_error = Some(format!(
+                        "Failed to save JSON to {}: {err}",
+                        save_path.display()
+                    ));
+                    self.last_status = None;
+                }
+            }
         }
     }
 }
@@ -100,6 +138,10 @@ impl App for RrrocketGui {
                 ui.colored_label(egui::Color32::RED, error);
             }
 
+            if let Some(status) = &self.last_status {
+                ui.colored_label(egui::Color32::from_rgb(38, 166, 91), status);
+            }
+
             if self.last_json.is_some() {
                 ui.separator();
                 ui.horizontal(|ui| {
@@ -108,6 +150,9 @@ impl App for RrrocketGui {
                         if let Some(json) = &self.last_json {
                             ctx.output_mut(|out| out.copied_text = json.clone());
                         }
+                    }
+                    if ui.button("Save to file…").clicked() {
+                        self.save_json();
                     }
                 });
 
